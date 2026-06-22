@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No Brand Baseball Analytics — Performance Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ground — capture-volume void, blue-graphite (not near-black) */
+  --bg:#0B1016; --bg2:#0E141C; --surf:#121A24; --surf2:#16202C; --line:#1F2B38; --line2:#28384A;
+  /* text ramp */
+  --ink:#E9EEF4; --ink2:#A7B6C6; --ink3:#6E8093; --ink4:#4A5A6C;
+  /* four data channels — color encodes provenance everywhere it appears */
+  --theia:#36E2B4;   /* mechanics — mocap green-cyan */
+  --tm:#FF8A3D;      /* ball flight — radar amber */
+  --grip:#A98BFF;    /* intent — violet */
+  --shape:#4DA8FF;   /* outcome — sky */
+  --signal:#FF5C6C;  /* problem / flag */
+  --signal-dim:#3a2026;
+  /* type */
+  --disp:'Space Grotesk',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--body);
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, rgba(54,226,180,.05), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(77,168,255,.05), transparent 60%);
+  min-height:100vh;
+}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::selection{background:rgba(54,226,180,.25)}
+
+/* ---------- utility: telemetry label ---------- */
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink3)}
+.mono{font-family:var(--mono)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- provenance chips ---------- */
+.chip{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid var(--line2);color:var(--ink3);white-space:nowrap}
+.chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.chip.live{color:var(--theia);border-color:rgba(54,226,180,.35);background:rgba(54,226,180,.06)}
+.chip.sample{color:var(--tm);border-color:rgba(255,138,61,.3);background:rgba(255,138,61,.05)}
+.chip.pending{color:var(--grip);border-color:rgba(169,139,255,.35);background:rgba(169,139,255,.05)}
+.chip.pending::before{background:none;border:1px dashed currentColor;border-radius:1px}
+
+/* ============================================================ TOP BAR */
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;
+  padding:14px 26px;background:rgba(11,16,22,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,#101820,#1a2836);border:1px solid var(--line2);
+  display:grid;place-items:center;position:relative;overflow:hidden}
+.brand-mark::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(transparent 46%,rgba(54,226,180,.6) 46%,rgba(54,226,180,.6) 54%,transparent 54%),
+  linear-gradient(90deg,transparent 46%,rgba(255,138,61,.5) 46%,rgba(255,138,61,.5) 54%,transparent 54%);
+  opacity:.9}
+.brand-name{font-family:var(--disp);font-weight:600;font-size:14.5px;letter-spacing:-.01em;line-height:1.1}
+.brand-name small{display:block;font-family:var(--mono);font-weight:400;font-size:9.5px;letter-spacing:.16em;color:var(--ink3);text-transform:uppercase;margin-top:2px}
+
+/* sync mode toggle */
+.syncbtn{display:flex;align-items:center;gap:10px;padding:7px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--surf);transition:.15s}
+.syncbtn:hover{border-color:var(--ink4)}
+.syncdot{width:8px;height:8px;border-radius:50%;flex:none;position:relative}
+.syncdot.m0{background:var(--theia)}
+.syncdot.m0::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--theia);animation:pulse 1.8s ease-out infinite}
+.syncdot.m1{background:var(--tm)}
+.syncdot.m2{background:var(--shape)}
+@keyframes pulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.6);opacity:0}}
+.synctxt{text-align:left;line-height:1.15}
+.synctxt b{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;display:block}
+.synctxt span{font-size:10px;color:var(--ink3)}
+
+/* ============================================================ HUB */
+.wrap{max-width:1220px;margin:0 auto;padding:0 26px}
+.hub-hero{padding:64px 0 30px}
+.hub-hero h1{font-family:var(--disp);font-weight:700;font-size:clamp(34px,5.2vw,58px);line-height:.98;letter-spacing:-.03em}
+.hub-hero h1 .accent{background:linear-gradient(100deg,var(--theia),var(--shape));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hub-hero p{max-width:560px;margin-top:18px;color:var(--ink2);font-size:16px}
+.hub-thesis{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.thesis-tag{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--ink2);
+  padding:6px 11px;border:1px solid var(--line);border-radius:20px;background:var(--bg2)}
+.thesis-tag i{width:7px;height:7px;border-radius:50%;font-style:normal}
+
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:44px 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.section-head h2{font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.01em}
+.section-head .meta{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;padding-bottom:70px}
+.arm{position:relative;display:block;background:linear-gradient(180deg,var(--surf),var(--bg2));border:1px solid var(--line);border-radius:13px;padding:18px;overflow:hidden;transition:.18s}
+.arm::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--armclr,var(--ink4));opacity:.7}
+.arm:hover{border-color:var(--line2);transform:translateY(-3px);box-shadow:0 18px 40px -22px rgba(0,0,0,.8)}
+.arm-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.arm-name{font-family:var(--disp);font-weight:600;font-size:20px;letter-spacing:-.01em;line-height:1.05}
+.arm-sub{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-top:3px;letter-spacing:.02em}
+.arm-hand{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;padding:3px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--ink2);flex:none}
+.arm-focus{margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+.arm-focus .eyebrow{color:var(--armclr,var(--ink3));opacity:.85}
+.arm-focus p{font-size:13.5px;color:var(--ink2);margin-top:5px;line-height:1.45}
+.arm-arsenal{display:flex;gap:4px;margin-top:14px;flex-wrap:wrap}
+.ptag{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.06em;padding:2px 6px;border-radius:4px;color:#0B1016}
+.arm-go{position:absolute;right:16px;bottom:16px;font-family:var(--mono);font-size:11px;color:var(--ink3);display:flex;align-items:center;gap:6px;transition:.15s}
+.arm:hover .arm-go{color:var(--ink)}
+.arm-go svg{transition:.18s}
+.arm:hover .arm-go svg{transform:translateX(3px)}
+
+/* ============================================================ PLAYER PAGE */
+.pl-header{padding:26px 0 18px;border-bottom:1px solid var(--line)}
+.pl-back{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--ink3);margin-bottom:18px;transition:.15s}
+.pl-back:hover{color:var(--ink)}
+.pl-id{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.pl-name{font-family:var(--disp);font-weight:700;font-size:clamp(30px,4.5vw,46px);line-height:.95;letter-spacing:-.025em}
+.pl-meta{display:flex;gap:8px;align-items:center;padding-bottom:6px}
+.pl-meta span{font-family:var(--mono);font-size:12px;color:var(--ink2);padding:4px 9px;border:1px solid var(--line2);border-radius:6px}
+.pl-focusbar{margin-top:18px;display:flex;gap:13px;align-items:flex-start;padding:14px 16px;background:var(--signal-dim);border:1px solid rgba(255,92,108,.25);border-radius:10px}
+.pl-focusbar .fdot{width:9px;height:9px;border-radius:50%;background:var(--signal);margin-top:5px;flex:none;box-shadow:0 0 0 4px rgba(255,92,108,.12)}
+.pl-focusbar .ftxt .eyebrow{color:var(--signal)}
+.pl-focusbar .ftxt p{margin-top:4px;font-size:14.5px;color:var(--ink)}
+
+/* sources strip — the explicit plug-points */
+.sources{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0 4px}
+.src{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:12px 13px}
+.src.dashed{border-style:dashed;border-color:var(--line2)}
+.src-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.src-h b{font-family:var(--disp);font-size:13px;font-weight:600}
+.src-note{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:7px;line-height:1.45}
+.src .ic{width:9px;height:9px;border-radius:2px}
+
+/* session + pitchlist layout */
+.pl-body{display:grid;grid-template-columns:300px 1fr;gap:18px;margin-top:22px;align-items:start}
+.panel{background:var(--surf);border:1px solid var(--line);border-radius:13px}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line)}
+.panel-h .eyebrow{color:var(--ink2)}
+
+.sess-list{padding:8px}
+.sess{width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 12px;border-radius:9px;transition:.13s;border:1px solid transparent}
+.sess:hover{background:var(--surf2)}
+.sess.active{background:var(--surf2);border-color:var(--line2)}
+.sess .sd{font-family:var(--disp);font-weight:600;font-size:14px}
+.sess .sm{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:2px}
+.sess .cnt{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.sess.active .cnt{color:var(--theia)}
+
+.session-meta{padding:13px 15px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.session-meta .mlabel{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+.session-meta .mval{font-family:var(--mono);font-size:13px;color:var(--ink);margin-left:7px}
+.typebar{display:flex;gap:4px;margin-left:auto}
+
+.pitchlist{max-height:340px;overflow-y:auto;padding:6px}
+.pitchlist::-webkit-scrollbar{width:8px}
+.pitchlist::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+.prow{width:100%;display:grid;grid-template-columns:34px 42px 1fr auto;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;transition:.1s;border:1px solid transparent;text-align:left}
+.prow:hover{background:var(--surf2)}
+.prow.active{background:var(--surf2);border-color:var(--line2)}
+.prow.flagged{box-shadow:inset 2px 0 0 var(--signal)}
+.prow .pno{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.prow .ptype{font-family:var(--mono);font-weight:600;font-size:11px;text-align:center;padding:2px 0;border-radius:4px;color:#0B1016}
+.prow .pbar{height:5px;border-radius:3px;background:var(--line);position:relative;overflow:hidden}
+.prow .pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;display:block}
+.prow .pvelo{font-family:var(--mono);font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+.prow .pvelo small{color:var(--ink3);font-size:10px}
+.flagmini{font-family:var(--mono);font-size:9px;color:var(--signal);letter-spacing:.08em;margin-left:6px}
+
+/* ============================ THE MARRIED VIEW */
+.married{margin-top:18px}
+.mv-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.mv-title{display:flex;align-items:baseline;gap:12px}
+.mv-title .lab{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.mv-title h3{font-family:var(--disp);font-weight:700;font-size:24px;letter-spacing:-.01em}
+.mv-title .pn{font-family:var(--mono);font-size:13px;color:var(--ink3)}
+
+/* top row: video + kinematics, joined by the spine below */
+.mv-top{display:grid;grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr);gap:14px}
+.mvpanel{background:var(--surf);border:1px solid var(--line);border-radius:13px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.mvpanel-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.mvpanel-h .lhs{display:flex;align-items:center;gap:8px}
+.mvpanel-h .dotc{width:8px;height:8px;border-radius:2px}
+.mvpanel-h b{font-family:var(--disp);font-size:13px;font-weight:600}
+
+/* THEIA VIDEO — capture-volume placeholder */
+.theia-vid{position:relative;aspect-ratio:4/3;background:
+  radial-gradient(120% 80% at 50% 120%, rgba(54,226,180,.07), transparent 55%),
+  var(--bg);display:grid;place-items:center;overflow:hidden}
+.theia-vid .floor{position:absolute;inset:auto 0 0 0;height:46%;
+  background-image:linear-gradient(rgba(54,226,180,.14) 1px,transparent 1px),linear-gradient(90deg,rgba(54,226,180,.10) 1px,transparent 1px);
+  background-size:34px 22px;transform:perspective(300px) rotateX(62deg);transform-origin:bottom;opacity:.55}
+.theia-vid .skel{position:relative;z-index:2;opacity:.85}
+.theia-vid .vlabel{position:absolute;z-index:3;bottom:12px;left:0;right:0;text-align:center}
+.theia-vid .vlabel .eyebrow{color:var(--theia);opacity:.9}
+.theia-vid .vlabel p{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:4px}
+.theia-vid .playc{position:absolute;z-index:3;top:50%;left:50%;transform:translate(-50%,-60%);width:48px;height:48px;border-radius:50%;border:1px solid rgba(54,226,180,.4);background:rgba(11,16,22,.5);display:grid;place-items:center}
+.theia-vid .playc svg{margin-left:3px}
+.capmeta{display:flex;justify-content:space-between;padding:9px 14px;font-family:var(--mono);font-size:10.5px;color:var(--ink3);border-top:1px solid var(--line)}
+.capmeta b{color:var(--ink2);font-weight:500}
+
+/* KINEMATIC SEQUENCE chart */
+.kin-wrap{padding:14px;flex:1;display:flex;flex-direction:column}
+.kin-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.kin-legend span{font-family:var(--mono);font-size:10.5px;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.kin-legend i{width:14px;height:3px;border-radius:2px}
+.kin-svg{width:100%;display:block}
+.kin-foot{font-family:var(--mono);font-size:10px;color:var(--ink4);margin-top:6px;line-height:1.4}
+
+/* ===== THE SIGNATURE: shared release-synchronized delivery spine ===== */
+.spine{margin:14px 0;background:linear-gradient(180deg,var(--surf2),var(--surf));border:1px solid var(--line2);border-radius:13px;padding:16px 18px 14px}
+.spine-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.spine-top .eyebrow{color:var(--ink2)}
+.spine-top .phase{font-family:var(--mono);font-size:11px;color:var(--theia)}
+.spine-track{position:relative;height:42px;cursor:pointer;user-select:none}
+.spine-rail{position:absolute;left:0;right:0;top:21px;height:2px;background:linear-gradient(90deg,var(--line2),var(--ink4),var(--line2));border-radius:2px}
+.spine-fill{position:absolute;left:0;top:21px;height:2px;background:linear-gradient(90deg,var(--theia),var(--tm));border-radius:2px;width:0}
+.spine-ev{position:absolute;top:21px;transform:translate(-50%,-50%);text-align:center}
+.spine-ev .tick{width:2px;height:14px;background:var(--ink3);margin:0 auto}
+.spine-ev .nm{font-family:var(--mono);font-size:8.5px;letter-spacing:.05em;color:var(--ink3);margin-top:5px;white-space:nowrap;transform:translateY(2px)}
+.spine-ev.rel .tick{width:3px;height:22px;background:var(--tm)}
+.spine-ev.rel .nm{color:var(--tm);font-weight:600}
+.spine-head{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);left:0;transition:left .04s linear;z-index:4}
+.spine-head::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:var(--ink);border:2px solid var(--bg);box-shadow:0 0 0 3px rgba(233,238,244,.15)}
+.spine-note{font-family:var(--mono);font-size:10px;color:var(--ink4);margin-top:14px;text-align:center}
+
+/* bottom: four channel panels */
+.mv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.mv-grid .mvpanel{min-height:230px}
+
+/* TrackMan readout */
+.tm-body{padding:13px 14px;display:grid;grid-template-columns:1fr 1fr;gap:11px 12px;align-content:start}
+.metric{}
+.metric .ml{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.metric .mv{font-family:var(--mono);font-size:20px;font-weight:600;line-height:1.1;margin-top:2px;font-variant-numeric:tabular-nums}
+.metric .mu{font-size:10px;color:var(--ink3);font-weight:400}
+.metric.flag .mv{color:var(--signal)}
+.metric.flag .ml{color:var(--signal)}
+.tm-delta{grid-column:1/-1;margin-top:2px;padding-top:10px;border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:var(--ink3);line-height:1.5}
+.tm-delta b{color:var(--signal)}
+
+/* grip placeholder */
+.grip-body{flex:1;display:flex;flex-direction:column}
+.grip-img{flex:1;min-height:130px;background:
+  repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(169,139,255,.05) 9px,rgba(169,139,255,.05) 10px),
+  var(--bg);display:grid;place-items:center;border-bottom:1px solid var(--line);position:relative}
+.grip-img .ball{width:96px;height:96px;border-radius:50%;border:1.5px dashed rgba(169,139,255,.45);position:relative;display:grid;place-items:center}
+.grip-img .ball::before,.grip-img .ball::after{content:"";position:absolute;border:1px solid rgba(169,139,255,.3);border-radius:50%;width:130%;height:60%}
+.grip-img .ball::before{transform:rotate(28deg)}
+.grip-img .ball::after{transform:rotate(-28deg)}
+.grip-img .seam{font-family:var(--mono);font-size:9px;color:var(--grip);letter-spacing:.1em}
+.grip-meta{padding:11px 14px}
+.grip-meta .gl{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.grip-meta p{font-family:var(--mono);font-size:11px;color:var(--ink2);margin-top:4px;line-height:1.45}
+
+/* shape plot (HB x IVB) */
+.shape-body{padding:8px 10px 10px;flex:1;display:flex;flex-direction:column}
+.shape-svg{width:100%;display:block;flex:1}
+.shape-foot{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink3);padding:0 4px}
+
+/* intervention */
+.interv{margin-top:18px;background:linear-gradient(180deg,var(--surf),var(--bg2));border:1px solid var(--line);border-radius:13px;overflow:hidden}
+.interv-h{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.interv-h h3{font-family:var(--disp);font-weight:600;font-size:16px;letter-spacing:-.01em}
+.interv-h .sub{font-family:var(--mono);font-size:10.5px;color:var(--ink3)}
+.interv-body{padding:18px;display:grid;grid-template-columns:1.2fr 1fr;gap:22px}
+.interv-read{}
+.interv-read .lead{font-size:15px;color:var(--ink);line-height:1.55}
+.crosswire{margin-top:16px;display:flex;flex-direction:column;gap:9px}
+.cw{display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start}
+.cw .cwd{width:9px;height:9px;border-radius:2px;margin-top:5px}
+.cw p{font-size:13px;color:var(--ink2);line-height:1.45}
+.cw p b{color:var(--ink);font-weight:600}
+.interv-do{background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:16px}
+.interv-do .eyebrow{color:var(--theia)}
+.interv-do ol{list-style:none;counter-reset:step;margin-top:12px;display:flex;flex-direction:column;gap:11px}
+.interv-do li{counter-increment:step;display:grid;grid-template-columns:24px 1fr;gap:11px;align-items:start}
+.interv-do li::before{content:counter(step);font-family:var(--mono);font-size:11px;font-weight:600;color:var(--theia);width:24px;height:24px;border:1px solid rgba(54,226,180,.3);border-radius:6px;display:grid;place-items:center}
+.interv-do li span{font-size:13px;color:var(--ink2);line-height:1.45;padding-top:2px}
+.bubba{margin:18px;margin-top:0;padding:14px 16px;background:rgba(255,138,61,.06);border:1px solid rgba(255,138,61,.22);border-radius:10px}
+.bubba .eyebrow{color:var(--tm)}
+.bubba p{font-family:var(--disp);font-size:16px;font-weight:500;color:var(--ink);margin-top:7px;line-height:1.45}
+
+.pl-foot{padding:30px 0 60px;text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--ink4);line-height:1.7}
+
+/* responsive */
+@media(max-width:1000px){
+  .pl-body{grid-template-columns:1fr}
+  .mv-top{grid-template-columns:1fr}
+  .mv-grid{grid-template-columns:1fr 1fr}
+  .sources{grid-template-columns:1fr 1fr}
+  .interv-body{grid-template-columns:1fr}
+}
+@media(max-width:620px){
+  .wrap,.topbar{padding-left:16px;padding-right:16px}
+  .mv-grid{grid-template-columns:1fr}
+  .sources{grid-template-columns:1fr}
+  .tm-body{grid-template-columns:1fr 1fr}
+  .syncbtn .synctxt{display:none}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* view switching */
+.view{display:none}
+.view.on{display:block;animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.stagger>*{animation:rise .4s ease backwards}
+.stagger>*:nth-child(1){animation-delay:.02s}
+.stagger>*:nth-child(2){animation-delay:.06s}
+.stagger>*:nth-child(3){animation-delay:.10s}
+.stagger>*:nth-child(4){animation-delay:.14s}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="brand" href="#" id="brandHome">
+    <div class="brand-mark"></div>
+    <div class="brand-name">No Brand Baseball Analytics<small>Performance Lab</small></div>
+  </a>
+  <button class="syncbtn" id="syncBtn" title="Cycle data-flow mode">
+    <span class="syncdot m1" id="syncDot"></span>
+    <span class="synctxt"><b id="syncLabel">PITCH-ORDER</b><span id="syncDesc">Theia ↔ TrackMan aligned by sequence #</span></span>
+  </button>
+</div>
+
+<!-- ===================== HUB ===================== -->
+<div class="view on" id="view-hub">
+  <div class="wrap">
+    <div class="hub-hero">
+      <h1>Throw it.<br>Watch it <span class="accent">resolve</span>.</h1>
+      <p>One room for every arm. Pick a pitcher, open a bullpen, and read a single pitch across all four channels — the mechanics that made it, the ball that came out, and where to take it next.</p>
+      <div class="hub-thesis">
+        <span class="thesis-tag"><i style="background:var(--theia)"></i>Theia · mechanics</span>
+        <span class="thesis-tag"><i style="background:var(--tm)"></i>TrackMan · ball flight</span>
+        <span class="thesis-tag"><i style="background:var(--grip)"></i>Grip · intent</span>
+        <span class="thesis-tag"><i style="background:var(--shape)"></i>Shape · outcome</span>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2>The Room</h2>
+      <span class="meta" id="rosterMeta">— arms · — active focus items</span>
+    </div>
+    <div class="roster" id="roster"></div>
+  </div>
+</div>
+
+<!-- ===================== PLAYER ===================== -->
+<div class="view" id="view-player">
+  <div class="wrap" id="playerWrap"></div>
+</div>
+
+<script>
+/* ============================================================
+   DATA  —  per-pitch values below are SAMPLE (illustrative).
+   Real bullpens replace them via the live TrackMan feed / upload.
+   Theia video + kinematics + grips are PENDING SOURCE.
+============================================================ */
+const PC = {FF:'#FF8A3D',SI:'#FFC46B',FC:'#FF5C6C',SL:'#A98BFF',SW:'#7C6BFF',CB:'#4DA8FF',CH:'#36E2B4',FS:'#36C2E2',KC:'#5CE6B4',SP:'#FF7A7A'};
+const PNAME = {FF:'4-Seam',SI:'Sinker',FC:'Cutter',SL:'Slider',SW:'Sweeper',CB:'Curveball',CH:'Changeup',FS:'Splitter',KC:'Kick Change',SP:'Splinker'};
+
+// base shape per type for a RHP (HB sign flips for LHP). [velo, spin, axis°, IVB", HB"]
+const BASE = {
+  FF:[98.4,2390,222,17.2,8.4], SI:[96.4,2160,231,9.1,16.0], FC:[91.6,2520,168,7.5,-2.2],
+  SL:[86.8,2610,118,2.3,-6.4], SW:[83.9,2760,96,0.4,-14.2], CB:[82.7,2880,28,-8.6,-9.8],
+  CH:[89.1,1690,236,6.2,15.1], FS:[87.8,1410,229,3.8,10.2], KC:[85.9,1520,224,5.1,12.0],
+  SP:[93.2,1850,228,5.4,12.8]
+};
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+// expand a compact session spec into a full pitch list
+function buildSession(seed, seq, hand, focusType, degrade){
+  const r=mulberry32(seed); const flip=hand==='LHP'?-1:1; const out=[]; let fcount=0;
+  seq.forEach((t,i)=>{
+    const b=BASE[t]||BASE.FF; const j=(s)=>(r()-.5)*2*s;
+    let velo=b[0]+j(0.9), spin=Math.round(b[1]+j(70)), axis=b[2]+j(5);
+    let ivb=b[3]+j(1.1), hb=(b[4]+j(1.3));
+    let flagged=false, note='';
+    // inject the focus-pitch degradation on every other focus-type rep
+    if(t===focusType && degrade){
+      fcount++;
+      if(fcount%2===0){
+        hb = hb - degrade.hb; ivb = ivb + degrade.ivb; axis = axis - degrade.axis;
+        spin = spin - degrade.spin; flagged=true; note=degrade.note;
+      }
+    }
+    out.push({no:i+1,t,velo:+velo.toFixed(1),spin,axis:Math.round(axis),
+      ivb:+ivb.toFixed(1),hb:+(hb*flip).toFixed(1),
+      relH:+(5.9+j(0.18)).toFixed(2),ext:+(6.7+j(0.2)).toFixed(1),flagged,note});
+  });
+  return out;
+}
+
+const PLAYERS = {
+  skenes:{
+    name:'Paul Skenes', hand:'RHP', org:'Pittsburgh Pirates', level:'MLB', clr:'#FF8A3D',
+    focusType:'SI',
+    focus:'Sinker is shedding seam-shifted wake — arm-side run has bled from a ~19.9″ peak toward ~15.0″ as the spin axis tilts up. Changeup remains elite; the sinker is the leak.',
+    arsenal:['FF','SI','SP','SL','SW','CH','CB'],
+    degrade:{hb:3.4,ivb:2.1,axis:6,spin:150,note:'SSW loss — run down, ride up'},
+    sessions:[
+      {date:'06/18',seq:['FF','SI','FF','CH','SI','SL','FF','SI','SP','CH','SW','SI','FF','CB','SI','CH','FF','SI','SL','FF','SI','CH'],seed:71},
+      {date:'06/11',seq:['FF','FF','SI','CH','SI','SL','FF','SI','CH','SW','SI','FF','CB','SI','FF','CH','SI','SL'],seed:42},
+      {date:'06/04',seq:['FF','SI','CH','SI','FF','SL','SI','CH','FF','SI','SW','FF','SI','CH','SI','CB'],seed:13},
+    ],
+    interv:{
+      lead:'The sinker’s problem is not the arm — it’s what the seams are doing at the top of the ball. As the axis tilts up, the ball stops catching the seam-shifted wake that gives it late, heavy arm-side run, and it starts behaving like a flat, hittable two-seam. The fix lives in the grip and the release, and Theia is what tells us which one.',
+      wires:[
+        {c:'theia',t:'<b>Theia</b> — check forearm pronation timing and the hand-set axis at release. If pronation is firing early, the ball is tilting before it leaves — that’s a release problem, not a grip problem.'},
+        {c:'tm',t:'<b>TrackMan</b> — axis has crept from ~231° toward the FF cluster; spin is down ~150 rpm. Active spin is rising, which is the wrong direction for a sinker.'},
+        {c:'grip',t:'<b>Grip</b> — confirm seam orientation. A one-seam / SSW set restores the wake; a true two-seam will keep washing out.'},
+      ],
+      steps:[
+        'Pull the Theia capture for the flagged sinkers and isolate release-frame hand axis vs. the early-season reps.',
+        'If the axis is tilting at release → grip cue first: re-seat to the SSW orientation, re-throw, watch HB on the next bullpen.',
+        'If the axis is clean but pronation is early → it’s sequencing; cue the hand to stay behind/inside the ball longer.',
+        'Re-measure HB next session. Target: pull arm-side run back above ~18″ without losing velo.',
+      ]
+    }
+  },
+  henry:{
+    name:'Cole Henry', hand:'RHP', org:'Washington Nationals', level:'MLB', clr:'#4DA8FF',
+    focusType:'FC',
+    focus:'Both org asks — more ride on the fastball, a real cutter — point to one root: the hand works under the ball (~234° axis), running spin into arm-side run instead of ride. Tighten toward ~208°.',
+    arsenal:['FF','SI','FC','CB','CH'],
+    degrade:{hb:0,ivb:0,axis:0,spin:0,note:''},
+    sessions:[
+      {date:'06/16',seq:['FF','FF','FC','CB','FF','FC','SI','FF','FC','CH','FF','FC','CB','FF','FC','SI','FF','FC'],seed:91},
+      {date:'06/09',seq:['FF','FC','FF','CB','FC','FF','SI','FC','FF','CH','FC','FF','CB','FC'],seed:55},
+    ],
+    interv:{
+      lead:'There’s one delivery here, not two problems. The hand finishes slightly under the ball, so the fastball runs arm-side instead of riding, and the “cutter” never gets to glove-side because the axis can’t reach it. Rotate the release axis from ~234° toward ~208° and both asks resolve off the same change.',
+      wires:[
+        {c:'theia',t:'<b>Theia</b> — look for the hand passing under the ball at release and a trailing forearm. That under-the-ball finish is the whole story.'},
+        {c:'tm',t:'<b>TrackMan</b> — FF axis sits near 234° with arm-side run where ride should be; FC isn’t separating because it shares that axis.'},
+        {c:'grip',t:'<b>Grip</b> — small cutter offset + intent to stay on top. The mechanical change does most of the work; the grip points it.'},
+      ],
+      steps:[
+        'Theia: confirm under-the-ball release on the FF reps; mark the forearm angle at ball release.',
+        'Cue “get on top / thumb down later” and re-throw FF — watch IVB climb and HB shrink on TrackMan.',
+        'Add the cutter offset once the FF axis tightens; the glove-side movement appears almost for free.',
+        'Track axis drift toward 208° across the session, not single pitches.',
+      ]
+    }
+  },
+  chandler:{
+    name:'Bubba Chandler', hand:'RHP', org:'Pittsburgh Pirates', level:'AAA', clr:'#36E2B4',
+    focusType:'FF',
+    focus:'Fastball is the engine. Getting more behind the ball turns it into a true riding four-seam — the kill pitch off it changes 1st / 2nd / 3rd time through.',
+    arsenal:['FF','SL','CH','CB'],
+    degrade:{hb:0,ivb:0,axis:0,spin:0,note:''},
+    bubba:true,
+    sessions:[
+      {date:'06/17',seq:['FF','FF','SL','FF','CH','FF','SL','FF','FF','CB','FF','SL','FF','CH','FF','FF','SL','FF'],seed:33},
+      {date:'06/10',seq:['FF','SL','FF','FF','CH','FF','SL','FF','CB','FF','SL','FF','FF','CH'],seed:77},
+    ],
+    interv:{
+      lead:'Keep it simple: the fastball is the engine. When you get more behind it, it rides — and a riding fastball up makes everything else play. The kill pitch changes as the lineup turns over: get the heater doing its job first, and the rest follows.',
+      wires:[
+        {c:'theia',t:'<b>Theia</b> — are we behind the ball at release, or slipping to the side? Behind = ride. We watch the hand at the last frame.'},
+        {c:'tm',t:'<b>TrackMan</b> — when you’re behind it, ride (IVB) goes up and the ball stays true. That’s the number we want climbing.'},
+        {c:'grip',t:'<b>Grip</b> — clean four-seam, finish through it. Nothing fancy.'},
+      ],
+      steps:[
+        '1st time through: pound the riding heater. Establish it.',
+        '2nd time through: same fastball, now the slider plays off it.',
+        '3rd time through: change the kill pitch — they’ve seen the heater, so the change/curve closes the at-bat.',
+        'Theia check: stay behind the ball, finish tall. Watch the ride number reward you.',
+      ]
+    }
+  },
+  taylor:{
+    name:'Grant Taylor', hand:'RHP', org:'Chicago White Sox', level:'MLB', clr:'#FF5C6C',
+    focusType:'SI',
+    focus:'Two-seam / sinker design via a one-seam SSW grip. Kick Change is the separator off the fastball; the sinker needs heavy arm-side life to complete the look.',
+    arsenal:['FF','SI','FC','SL','KC'],
+    degrade:{hb:2.6,ivb:1.4,axis:4,spin:110,note:'two-seam washing out — needs SSW set'},
+    sessions:[
+      {date:'06/15',seq:['FF','SI','KC','FF','FC','SI','FF','KC','SI','SL','FF','SI','FC','KC','FF','SI','FF','KC'],seed:88},
+      {date:'06/08',seq:['FF','KC','SI','FF','FC','SI','FF','KC','SL','SI','FF','KC','SI','FC'],seed:21},
+    ],
+    interv:{
+      lead:'The sinker is washing out into a flat two-seam. A one-seam SSW orientation puts the right seam in the wind and brings the heavy arm-side run back — which is what makes the Kick Change so nasty, because the two move out of the same tunnel and split late.',
+      wires:[
+        {c:'theia',t:'<b>Theia</b> — verify the release is consistent between the fastball and the Kick Change. The deception is in shared mechanics, split outcomes.'},
+        {c:'tm',t:'<b>TrackMan</b> — sinker HB is short of target and axis is drifting toward the four-seam. SSW orientation should restore the run.'},
+        {c:'grip',t:'<b>Grip</b> — one-seam SSW set on the sinker; keep the Kick Change offset identical-looking out of the hand.'},
+      ],
+      steps:[
+        'Re-seat the sinker to the one-seam SSW grip and re-throw alongside the Kick Change.',
+        'Theia: confirm the two share a release window so they tunnel.',
+        'TrackMan: drive sinker HB back up; confirm the Kick Change splits down-and-away from it.',
+        'Lock the pairing that holds the tightest tunnel with the widest late split.',
+      ]
+    }
+  },
+  volchko:{
+    name:'Joey Volchko', hand:'RHP', org:'CWS / Draft', level:'NCAA', clr:'#A98BFF',
+    focusType:'FF',
+    focus:'Supination-only arsenal — the four-seam behaves like a functional cutter as the axis shifts. Strong vs RHH, but six lefty bats can sit on it. Needs a pronated option.',
+    arsenal:['FF','FC','SL','CB'],
+    degrade:{hb:0,ivb:0,axis:0,spin:0,note:''},
+    sessions:[
+      {date:'06/14',seq:['FF','FC','SL','FF','CB','FC','FF','SL','FF','FC','SL','FF','CB','FF','FC','SL','FF','FC'],seed:64},
+      {date:'06/07',seq:['FF','SL','FC','FF','CB','SL','FF','FC','FF','SL','FC','FF','CB','SL'],seed:30},
+    ],
+    interv:{
+      lead:'Everything is supinated, so the whole arsenal lives glove-side — great against righties, but a left-handed lineup can eliminate half the plate. The unlock is one pronated pitch (a true changeup or a kick change) to give lefties something running away. Theia tells us whether the hand can even get there.',
+      wires:[
+        {c:'theia',t:'<b>Theia</b> — can the forearm pronate at release, or is the pattern locked supinated? This decides changeup vs kick change as the path of least resistance.'},
+        {c:'tm',t:'<b>TrackMan</b> — the FF axis is shifting toward cutter behavior; against LHH there’s nothing with arm-side action to balance it.'},
+        {c:'grip',t:'<b>Grip</b> — trial a kick-change grip that produces arm-side movement without forcing a foreign release.'},
+      ],
+      steps:[
+        'Theia: assess pronation capability at release on a few experimental reps.',
+        'If pronation is available → build a true changeup; if not → kick change for arm-side movement off a supinated release.',
+        'TrackMan: confirm the new pitch shows real arm-side separation from the FF.',
+        'Re-run the lefty game plan once there’s a pitch that runs away from LHH.',
+      ]
+    }
+  },
+  harrington:{
+    name:'Thomas Harrington', hand:'RHP', org:'Pittsburgh Pirates', level:'AAA', clr:'#36C2E2',
+    focusType:'FF',
+    focus:'Full-arsenal RHP with complete Hawk-Eye coverage. Command-and-mix profile — the question is sequencing and which secondary carries each time through.',
+    arsenal:['FF','SI','FC','SL','CH','CB'],
+    degrade:{hb:0,ivb:0,axis:0,spin:0,note:''},
+    sessions:[
+      {date:'06/16',seq:['FF','SI','SL','CH','FF','FC','CB','FF','SI','SL','CH','FF','FC','SI','FF','SL','CH','FF'],seed:46},
+      {date:'06/09',seq:['FF','SL','SI','CH','FF','FC','FF','SI','SL','CH','FF','CB','SI','FF'],seed:19},
+    ],
+    interv:{
+      lead:'This is a mix-and-command arm, so the leverage isn’t one broken pitch — it’s sequencing. With six pitches and full Hawk-Eye, the work is finding which secondary owns each time through and tightening the tunnels that hold across the arsenal.',
+      wires:[
+        {c:'theia',t:'<b>Theia</b> — consistency check across the whole arsenal: a repeatable release is what lets six pitches share one tunnel.'},
+        {c:'tm',t:'<b>TrackMan</b> — full coverage means we can rank secondaries by whiff and weak contact per count and build the sequence from data.'},
+        {c:'grip',t:'<b>Grip</b> — confirm each secondary holds its shape; no grip drift between the slider and cutter.'},
+      ],
+      steps:[
+        'Map each secondary’s best count from the Hawk-Eye sample.',
+        'Theia: confirm release repeatability so the arsenal tunnels together.',
+        'Build a 1st/2nd/3rd-time-through plan around the strongest secondary per turn.',
+        'Re-test the sequence next bullpen and trim what doesn’t hold.',
+      ]
+    }
+  },
+  barco:{
+    name:'Hunter Barco', hand:'LHP', org:'Pittsburgh Pirates', level:'AAA', clr:'#5CE6B4',
+    focusType:'FF',
+    focus:'Left-handed starter building through Indianapolis. Profile travels on the fastball-to-changeup separation; the work is holding shape and command across deeper outings.',
+    arsenal:['FF','SI','SL','CH','CB'],
+    degrade:{hb:0,ivb:0,axis:0,spin:0,note:''},
+    sessions:[
+      {date:'06/15',seq:['FF','CH','SL','FF','SI','CH','FF','SL','CH','FF','CB','SI','FF','CH','SL','FF','CH','FF'],seed:58},
+      {date:'06/08',seq:['FF','SL','CH','FF','SI','CH','FF','SL','FF','CH','CB','SI','FF','CH'],seed:25},
+    ],
+    interv:{
+      lead:'As a lefty starter, the engine is the fastball-changeup separation — that pairing is what carries a third time through. The build question is whether the shape and command hold as pitch counts climb, which is exactly what bullpen-level Theia + TrackMan can flag before it shows up in a box score.',
+      wires:[
+        {c:'theia',t:'<b>Theia</b> — watch for release drift late in the session as a proxy for fatigue; that’s the early warning for deeper outings.'},
+        {c:'tm',t:'<b>TrackMan</b> — track FF/CH separation and whether the changeup keeps its arm-side fade rep to rep.'},
+        {c:'grip',t:'<b>Grip</b> — confirm the changeup grip stays consistent; lefty fade lives or dies on a stable set.'},
+      ],
+      steps:[
+        'TrackMan: establish the baseline FF-to-CH separation early in the bullpen.',
+        'Theia: compare release in the first third vs the last third for drift.',
+        'Hold the changeup fade as the workload tag climbs — flag any shape loss.',
+        'Carry the stable pairing into the next AAA outing’s plan.',
+      ]
+    }
+  },
+};
+
+/* ---- materialize sessions ---- */
+Object.values(PLAYERS).forEach(p=>{
+  p.sessions.forEach(s=>{ s.pitches = buildSession(s.seed, s.seq, p.hand, p.focusType, p.degrade.hb?p.degrade:null); });
+});
+
+/* ============================================================ RENDER: HUB */
+function renderHub(){
+  const r=document.getElementById('roster'); r.innerHTML='';
+  const keys=Object.keys(PLAYERS);
+  keys.forEach(k=>{
+    const p=PLAYERS[k];
+    const tags=p.arsenal.map(t=>`<span class="ptag" style="background:${PC[t]}">${t}</span>`).join('');
+    const el=document.createElement('a');
+    el.className='arm'; el.href='#'; el.style.setProperty('--armclr',p.clr);
+    el.onclick=(e)=>{e.preventDefault();openPlayer(k);};
+    el.innerHTML=`
+      <div class="arm-top">
+        <div>
+          <div class="arm-name">${p.name}</div>
+          <div class="arm-sub">${p.org} · ${p.level}</div>
+        </div>
+        <div class="arm-hand">${p.hand}</div>
+      </div>
+      <div class="arm-arsenal">${tags}</div>
+      <div class="arm-focus">
+        <div class="eyebrow">Active focus</div>
+        <p>${p.focus}</p>
+      </div>
+      <div class="arm-go">open<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>`;
+    r.appendChild(el);
+  });
+  document.getElementById('rosterMeta').textContent=`${keys.length} arms · ${keys.length} active focus items`;
+}
+
+/* ============================================================ CHARTS */
+// kinematic sequence — proximal→distal peak angular velocities (illustrative structure)
+function kinSequenceSVG(){
+  const W=520,H=210,padL=34,padB=26,padT=10,padR=10;
+  const x=t=>padL+(W-padL-padR)*t;
+  const y=v=>padT+(H-padT-padB)*(1-v);
+  // segments: peak time (0-1), peak height (0-1), color
+  const segs=[
+    {n:'Pelvis', pk:.42, h:.55, c:'#5CE6B4'},
+    {n:'Trunk',  pk:.56, h:.74, c:'#36E2B4'},
+    {n:'Arm',    pk:.70, h:.90, c:'#36C2E2'},
+    {n:'Hand',   pk:.84, h:1.0, c:'#4DA8FF'},
+  ];
+  const releaseT=.88;
+  let paths='';
+  segs.forEach(s=>{
+    let d='';
+    for(let i=0;i<=60;i++){
+      const t=i/60;
+      const g=Math.exp(-Math.pow((t-s.pk)/0.13,2)); // gaussian bump
+      const v=s.h*g;
+      d+=(i===0?'M':'L')+x(t).toFixed(1)+' '+y(v).toFixed(1)+' ';
+    }
+    paths+=`<path d="${d}" fill="none" stroke="${s.c}" stroke-width="2" opacity=".95"/>`;
+    paths+=`<circle cx="${x(s.pk)}" cy="${y(s.h)}" r="3" fill="${s.c}"/>`;
+  });
+  const MONO="'IBM Plex Mono',monospace";
+  // axes
+  const axis=`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}" stroke="#28384A"/>
+    <line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="#28384A"/>`;
+  // release marker
+  const rel=`<line x1="${x(releaseT)}" y1="${padT}" x2="${x(releaseT)}" y2="${H-padB}" stroke="#FF8A3D" stroke-width="2" stroke-dasharray="3 3" opacity=".8"/>
+    <text x="${x(releaseT)}" y="${padT+9}" fill="#FF8A3D" font-family="${MONO}" font-size="9" text-anchor="end">REL</text>`;
+  // foot-strike marker
+  const fs=`<line x1="${x(.30)}" y1="${padT}" x2="${x(.30)}" y2="${H-padB}" stroke="#4A5A6C" stroke-dasharray="2 3"/>
+    <text x="${x(.30)+3}" y="${H-padB-4}" fill="#4A5A6C" font-family="${MONO}" font-size="8">FS</text>`;
+  const ylab=`<text x="${padL-6}" y="${y(1)+3}" fill="#6E8093" font-family="${MONO}" font-size="8" text-anchor="end">peak ω</text>`;
+  const xlab=`<text x="${(W)/2}" y="${H-4}" fill="#6E8093" font-family="${MONO}" font-size="8" text-anchor="middle">delivery timeline →</text>`;
+  return `<svg class="kin-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${axis}${fs}${rel}${paths}${ylab}${xlab}
+    <line class="kinHead" x1="${x(0)}" y1="${padT}" x2="${x(0)}" y2="${H-padB}" stroke="#E9EEF4" stroke-width="1.5" opacity="0"/></svg>`;
+}
+
+// movement plot HB x IVB
+function shapeSVG(player, pitch){
+  const W=240,H=200,pad=26,cx=W/2,cyTop=pad,cyBot=H-pad;
+  const range=22; // inches each way
+  const sx=hb=>cx+(hb/range)*(W/2-pad);
+  const sy=ivb=>H-pad-((ivb+12)/(range+2))*(H-2*pad);
+  // arsenal average points
+  const flip=player.hand==='LHP'?-1:1;
+  let pts='';
+  player.arsenal.forEach(t=>{
+    const b=BASE[t]; const hb=b[4]*flip, ivb=b[3];
+    const sel=(t===pitch.t);
+    pts+=`<circle cx="${sx(hb).toFixed(1)}" cy="${sy(ivb).toFixed(1)}" r="${sel?0:5}" fill="${PC[t]}" opacity="${sel?0:.32}"/>`;
+    if(!sel) pts+=`<text x="${sx(hb).toFixed(1)}" y="${(sy(ivb)+3).toFixed(1)}" fill="${PC[t]}" font-family="'IBM Plex Mono',monospace" font-size="7" text-anchor="middle" opacity=".7">${t}</text>`;
+  });
+  // selected pitch (this rep) — highlighted, possibly off its cluster if flagged
+  const selHB=pitch.hb, selIVB=pitch.ivb;
+  const selColor=PC[pitch.t];
+  const flagged=pitch.flagged;
+  // show expected cluster center vs actual rep with a connector when flagged
+  let flagWire='';
+  if(flagged){
+    const b=BASE[pitch.t]; const ehb=b[4]*flip, eivb=b[3];
+    flagWire=`<line x1="${sx(ehb)}" y1="${sy(eivb)}" x2="${sx(selHB)}" y2="${sy(selIVB)}" stroke="#FF5C6C" stroke-width="1.2" stroke-dasharray="3 2" opacity=".7"/>
+      <circle cx="${sx(ehb)}" cy="${sy(eivb)}" r="4" fill="none" stroke="${selColor}" stroke-dasharray="2 2" opacity=".6"/>`;
+  }
+  const cross=`<line x1="${cx}" y1="${pad-4}" x2="${cx}" y2="${H-pad+4}" stroke="#1F2B38" />
+    <line x1="${pad-4}" y1="${(cyTop+cyBot)/2}" x2="${W-pad+4}" y2="${(cyTop+cyBot)/2}" stroke="#1F2B38"/>`;
+  const sel=`${flagWire}<circle cx="${sx(selHB)}" cy="${sy(selIVB)}" r="7" fill="${selColor}"/>
+    <circle cx="${sx(selHB)}" cy="${sy(selIVB)}" r="11" fill="none" stroke="${selColor}" opacity=".4"/>`;
+  return `<svg class="shape-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${cross}${pts}${sel}</svg>`;
+}
+
+/* ============================================================ RENDER: PLAYER */
+let STATE={player:null,sessionIdx:0,pitchIdx:0};
+
+function renderPlayer(key){
+  const p=PLAYERS[key]; if(!p){openHub();return;}
+  STATE.player=key; STATE.sessionIdx=0;
+  // default to a flagged pitch if one exists, else last
+  const sess=p.sessions[STATE.sessionIdx]||p.sessions[0];
+  let dft=sess.pitches.findIndex(x=>x.flagged); if(dft<0)dft=Math.min(6,sess.pitches.length-1);
+  STATE.pitchIdx=dft;
+
+  const w=document.getElementById('playerWrap');
+  w.innerHTML=`
+    <div class="pl-header">
+      <a class="pl-back" href="#" onclick="event.preventDefault();openHub()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M11 18l-6-6 6-6"/></svg> The Room</a>
+      <div class="pl-id">
+        <div class="pl-name">${p.name}</div>
+        <div class="pl-meta"><span>${p.hand}</span><span>${p.org}</span><span>${p.level}</span></div>
+      </div>
+      <div class="pl-focusbar">
+        <div class="fdot"></div>
+        <div class="ftxt"><div class="eyebrow">Active focus</div><p>${p.focus}</p></div>
+      </div>
+
+      <div class="sources">
+        <div class="src dashed">
+          <div class="src-h"><b><span class="ic" style="background:var(--theia)"></span> Theia — Kinematics</b><span class="chip pending">Pending source</span></div>
+          <div class="src-note">C3D / JSON export → segment angular-velocity time series. Drives the kinematic sequence + spine.</div>
+        </div>
+        <div class="src dashed">
+          <div class="src-h"><b><span class="ic" style="background:var(--theia)"></span> Theia — Video</b><span class="chip pending">Pending source</span></div>
+          <div class="src-note">Rendered skeleton clip. Host TBD (Vimeo / S3+CDN / self). Streams into the capture panel, scrubbed by the spine.</div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b><span class="ic" style="background:var(--tm)"></span> TrackMan</b><span class="chip sample">Sample → feed</span></div>
+          <div class="src-note">Per-pitch rows shown are illustrative. Live feed or post-session upload replaces them, keyed by pitch #.</div>
+        </div>
+        <div class="src dashed">
+          <div class="src-h"><b><span class="ic" style="background:var(--grip)"></span> Grip</b><span class="chip pending">Pending source</span></div>
+          <div class="src-note">Grip photo + seam orientation per pitch type. Tagged to the rep so the intent lines up with the shape.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pl-body">
+      <div class="panel">
+        <div class="panel-h"><span class="eyebrow">Bullpen Sessions</span></div>
+        <div class="sess-list" id="sessList"></div>
+      </div>
+      <div class="panel">
+        <div class="session-meta" id="sessMeta"></div>
+        <div class="pitchlist" id="pitchList"></div>
+      </div>
+    </div>
+
+    <div class="married" id="married"></div>
+
+    <div class="pl-foot">
+      No Brand Baseball Analytics · Performance Lab — scaffold v0.1<br>
+      Per-pitch TrackMan values are SAMPLE. Theia video, Theia kinematics, and grips are PENDING SOURCE — wire on hosting decision.
+    </div>
+  `;
+  renderSessions();
+  renderPitchList();
+  renderMarried();
+  document.getElementById('view-player').scrollIntoView?.({block:'start'});
+  window.scrollTo(0,0);
+}
+
+function renderSessions(){
+  const p=PLAYERS[STATE.player]; const el=document.getElementById('sessList'); el.innerHTML='';
+  p.sessions.forEach((s,i)=>{
+    const b=document.createElement('button');
+    b.className='sess'+(i===STATE.sessionIdx?' active':'');
+    const types=[...new Set(s.pitches.map(x=>x.t))];
+    b.innerHTML=`<div><div class="sd">Bullpen ${s.date}</div><div class="sm">${types.join(' · ')}</div></div><div class="cnt">${s.pitches.length}</div>`;
+    b.onclick=()=>{STATE.sessionIdx=i; let d=s.pitches.findIndex(x=>x.flagged); STATE.pitchIdx=d<0?Math.min(6,s.pitches.length-1):d; renderSessions(); renderPitchList(); renderMarried();};
+    el.appendChild(b);
+  });
+}
+
+function renderPitchList(){
+  const p=PLAYERS[STATE.player]; const s=p.sessions[STATE.sessionIdx];
+  const types=[...new Set(s.pitches.map(x=>x.t))];
+  document.getElementById('sessMeta').innerHTML=`
+    <div><span class="mlabel">Session</span><span class="mval">${s.date}</span></div>
+    <div><span class="mlabel">Pitches</span><span class="mval">${s.pitches.length}</span></div>
+    <div class="typebar">${types.map(t=>`<span class="ptag" style="background:${PC[t]}">${t}</span>`).join('')}</div>`;
+  const el=document.getElementById('pitchList'); el.innerHTML='';
+  const maxV=Math.max(...s.pitches.map(x=>x.velo));
+  s.pitches.forEach((pt,i)=>{
+    const b=document.createElement('button');
+    b.className='prow'+(i===STATE.pitchIdx?' active':'')+(pt.flagged?' flagged':'');
+    b.innerHTML=`
+      <span class="pno">#${pt.no}</span>
+      <span class="ptype" style="background:${PC[pt.t]}">${pt.t}</span>
+      <span class="pbar"><i style="width:${(pt.velo/maxV*100).toFixed(0)}%;background:${PC[pt.t]}"></i></span>
+      <span class="pvelo">${pt.velo}<small> mph</small>${pt.flagged?'<span class="flagmini">FLAG</span>':''}</span>`;
+    b.onclick=()=>{STATE.pitchIdx=i; renderPitchList(); renderMarried();};
+    el.appendChild(b);
+  });
+}
+
+function renderMarried(){
+  const p=PLAYERS[STATE.player]; const s=p.sessions[STATE.sessionIdx]; const pt=s.pitches[STATE.pitchIdx];
+  const flip=p.hand==='LHP'?'(LHP · arm-side = left)':'';
+  const el=document.getElementById('married');
+  const flagClass=v=>pt.flagged?'metric flag':'metric';
+
+  el.innerHTML=`
+    <div class="mv-head">
+      <div class="mv-title">
+        <span class="lab">Married View</span>
+        <h3>Pitch #${pt.no}</h3>
+        <span class="pn">${PNAME[pt.t]} · ${pt.velo} mph</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="chip live">Theia sync · #${pt.no}</span>
+        <span class="chip sample">TrackMan · sample</span>
+        ${pt.flagged?'<span class="chip" style="color:var(--signal);border-color:rgba(255,92,108,.4)">Flagged rep</span>':''}
+      </div>
+    </div>
+
+    <div class="mv-top stagger">
+      <!-- THEIA VIDEO -->
+      <div class="mvpanel">
+        <div class="mvpanel-h"><div class="lhs"><span class="dotc" style="background:var(--theia)"></span><b>Theia — Motion Capture</b></div><span class="chip pending">Pending source</span></div>
+        <div class="theia-vid">
+          <div class="floor"></div>
+          <svg class="skel" width="120" height="150" viewBox="0 0 120 150" fill="none" stroke="rgba(54,226,180,.55)" stroke-width="2" stroke-linecap="round">
+            <circle cx="60" cy="20" r="9"/>
+            <line x1="60" y1="29" x2="60" y2="78"/>
+            <line x1="60" y1="40" x2="34" y2="60"/><line x1="34" y1="60" x2="26" y2="40"/>
+            <line x1="60" y1="40" x2="88" y2="58"/><line x1="88" y1="58" x2="100" y2="34"/>
+            <circle cx="100" cy="30" r="4" fill="rgba(255,138,61,.8)" stroke="none"/>
+            <line x1="60" y1="78" x2="44" y2="120"/><line x1="44" y1="120" x2="40" y2="148"/>
+            <line x1="60" y1="78" x2="78" y2="118"/><line x1="78" y1="118" x2="86" y2="148"/>
+          </svg>
+          <div class="playc"><svg width="16" height="16" viewBox="0 0 24 24" fill="#36E2B4"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="vlabel"><div class="eyebrow">Capture clip renders here</div><p>scrubbed by the delivery spine ↓</p></div>
+        </div>
+        <div class="capmeta"><span>capture <b>THEIA-${(1000+pt.no)}</b></span><span>aligned to TM <b>#${pt.no}</b></span></div>
+      </div>
+
+      <!-- KINEMATIC SEQUENCE -->
+      <div class="mvpanel">
+        <div class="mvpanel-h"><div class="lhs"><span class="dotc" style="background:var(--theia)"></span><b>Kinematic Sequence</b></div><span class="chip pending">Pending source</span></div>
+        <div class="kin-wrap">
+          <div class="kin-legend">
+            <span><i style="background:#5CE6B4"></i>Pelvis</span>
+            <span><i style="background:#36E2B4"></i>Trunk</span>
+            <span><i style="background:#36C2E2"></i>Arm</span>
+            <span><i style="background:#4DA8FF"></i>Hand</span>
+          </div>
+          ${kinSequenceSVG()}
+          <div class="kin-foot">Illustrative proximal→distal structure. Replace with Theia segment angular-velocity series — this is where “which segment drove the shape” gets answered.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SIGNATURE: shared release-sync spine ===== -->
+    <div class="spine">
+      <div class="spine-top"><span class="eyebrow">Delivery Spine · release-synchronized</span><span class="phase" id="phaseRead">phase 0% · pre-windup</span></div>
+      <div class="spine-track" id="spineTrack">
+        <div class="spine-rail"></div>
+        <div class="spine-fill" id="spineFill"></div>
+        <div class="spine-ev" style="left:8%"><div class="tick"></div><div class="nm">SET</div></div>
+        <div class="spine-ev" style="left:30%"><div class="tick"></div><div class="nm">FOOT-STRIKE</div></div>
+        <div class="spine-ev" style="left:62%"><div class="tick"></div><div class="nm">MAX ER</div></div>
+        <div class="spine-ev rel" style="left:88%"><div class="tick"></div><div class="nm">RELEASE</div></div>
+        <div class="spine-ev" style="left:98%"><div class="tick"></div><div class="nm">FINISH</div></div>
+        <div class="spine-head" id="spineHead"></div>
+      </div>
+      <div class="spine-note">Drag the playhead — one timeline drives the capture clip, the kinematic peaks, and the release frame. This is the lock that proves Theia #${pt.no} is TrackMan #${pt.no}.</div>
+    </div>
+
+    <!-- four channel panels -->
+    <div class="mv-grid stagger">
+      <!-- TRACKMAN -->
+      <div class="mvpanel">
+        <div class="mvpanel-h"><div class="lhs"><span class="dotc" style="background:var(--tm)"></span><b>TrackMan</b></div><span class="chip sample">Sample</span></div>
+        <div class="tm-body">
+          <div class="metric"><div class="ml">Velocity</div><div class="mv">${pt.velo}<span class="mu"> mph</span></div></div>
+          <div class="metric"><div class="ml">Spin</div><div class="mv">${pt.spin}<span class="mu"> rpm</span></div></div>
+          <div class="${flagClass()}"><div class="ml">Spin Axis</div><div class="mv">${pt.axis}°</div></div>
+          <div class="metric"><div class="ml">Induced VB</div><div class="mv">${pt.ivb}<span class="mu">″</span></div></div>
+          <div class="${flagClass()}"><div class="ml">Horz Break</div><div class="mv">${Math.abs(pt.hb)}<span class="mu">″</span></div></div>
+          <div class="metric"><div class="ml">Rel Height</div><div class="mv">${pt.relH}<span class="mu">′</span></div></div>
+          ${pt.flagged?`<div class="tm-delta">Flagged: <b>${pt.note}</b>. This rep sits off the pitch-type cluster — see the shape plot.</div>`:`<div class="tm-delta" style="color:var(--ink4)">Extension ${pt.ext}′ · in cluster for ${PNAME[pt.t]}.</div>`}
+        </div>
+      </div>
+
+      <!-- GRIP -->
+      <div class="mvpanel">
+        <div class="mvpanel-h"><div class="lhs"><span class="dotc" style="background:var(--grip)"></span><b>Grip</b></div><span class="chip pending">Pending source</span></div>
+        <div class="grip-body">
+          <div class="grip-img"><div class="ball"><span class="seam">SEAM SET</span></div></div>
+          <div class="grip-meta"><div class="gl">${PNAME[pt.t]} grip</div><p>Grip photo + seam orientation render here, tagged to this rep.</p></div>
+        </div>
+      </div>
+
+      <!-- SHAPE -->
+      <div class="mvpanel">
+        <div class="mvpanel-h"><div class="lhs"><span class="dotc" style="background:var(--shape)"></span><b>Shape</b></div><span class="chip sample">Sample</span></div>
+        <div class="shape-body">
+          ${shapeSVG(p,pt)}
+          <div class="shape-foot"><span>← glove-side</span><span>HB × IVB</span><span>arm-side →</span></div>
+        </div>
+      </div>
+
+      <!-- ARSENAL CONTEXT -->
+      <div class="mvpanel">
+        <div class="mvpanel-h"><div class="lhs"><span class="dotc" style="background:var(--shape)"></span><b>vs Arsenal</b></div><span class="chip sample">Sample</span></div>
+        <div class="tm-body" style="grid-template-columns:1fr">
+          ${p.arsenal.map(t=>{
+            const b=BASE[t]; const isSel=t===pt.t;
+            return `<div style="display:flex;align-items:center;gap:9px;padding:3px 0;${isSel?'':'opacity:.6'}">
+              <span class="ptype" style="background:${PC[t]};width:34px">${t}</span>
+              <span class="num" style="font-size:12px;color:var(--ink2)">${b[0].toFixed(0)}</span>
+              <span class="num" style="font-size:11px;color:var(--ink3)">IVB ${b[3].toFixed(0)}″</span>
+              ${isSel?'<span class="num" style="font-size:9px;color:var(--shape);margin-left:auto">THIS PITCH</span>':''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- INTERVENTION -->
+    <div class="interv">
+      <div class="interv-h">
+        <h3>Where to go from here</h3>
+        <span class="sub">reads Theia + TrackMan + grip → one prescription</span>
+      </div>
+      ${p.bubba?`<div class="bubba"><div class="eyebrow">Speak Bubba</div><p>${p.interv.lead}</p></div>`:''}
+      <div class="interv-body">
+        <div class="interv-read">
+          ${p.bubba?'':`<p class="lead">${p.interv.lead}</p>`}
+          <div class="crosswire">
+            ${p.interv.wires.map(wr=>`<div class="cw"><div class="cwd" style="background:var(--${wr.c})"></div><p>${wr.t}</p></div>`).join('')}
+          </div>
+        </div>
+        <div class="interv-do">
+          <div class="eyebrow">Next bullpen — do this</div>
+          <ol>${p.interv.steps.map(s=>`<li><span>${s}</span></li>`).join('')}</ol>
+        </div>
+      </div>
+    </div>
+  `;
+  wireSpine();
+}
+
+/* ---- the spine playhead drives cross-panel sync ---- */
+let SPINE=null, spineDrag=false;
+function wireSpine(){
+  const track=document.getElementById('spineTrack'); if(!track)return;
+  const head=document.getElementById('spineHead');
+  const fill=document.getElementById('spineFill');
+  const phase=document.getElementById('phaseRead');
+  const kinHead=document.querySelector('.kinHead');
+  const phases=[[0,'pre-windup'],[8,'set'],[30,'foot-strike'],[50,'pelvis fires'],[62,'max external rotation'],[75,'arm accel'],[88,'release'],[98,'finish']];
+  function phaseFor(pct){let lab='pre-windup';for(const[t,l]of phases){if(pct>=t)lab=l;}return lab;}
+  function set(pct){
+    pct=Math.max(0,Math.min(100,pct));
+    head.style.left=pct+'%'; fill.style.width=pct+'%';
+    phase.textContent=`phase ${Math.round(pct)}% · ${phaseFor(pct)}`;
+    if(kinHead){const padL=34,W=520,padR=10;const xx=padL+(W-padL-padR)*(pct/100);kinHead.setAttribute('x1',xx);kinHead.setAttribute('x2',xx);kinHead.setAttribute('opacity',pct>0?'.7':'0');}
+  }
+  SPINE={track,set};
+  function fromEvent(e){const rect=track.getBoundingClientRect();const cx=(e.touches?e.touches[0].clientX:e.clientX);set(((cx-rect.left)/rect.width)*100);}
+  track.onmousedown=e=>{spineDrag=true;fromEvent(e);};
+  track.ontouchstart=e=>{spineDrag=true;fromEvent(e);};
+  track.ontouchmove=e=>{if(spineDrag)fromEvent(e);};
+  track.ontouchend=()=>spineDrag=false;
+  set(0);
+}
+/* window-level drag listeners attached once */
+window.addEventListener('mousemove',e=>{if(spineDrag&&SPINE){const r=SPINE.track.getBoundingClientRect();SPINE.set(((e.clientX-r.left)/r.width)*100);}});
+window.addEventListener('mouseup',()=>spineDrag=false);
+
+/* ============================================================ SYNC MODE TOGGLE */
+const SYNC=[
+  {dot:'m0',label:'LIVE',desc:'Pitches stream onto the page as thrown'},
+  {dot:'m1',label:'PITCH-ORDER',desc:'Theia ↔ TrackMan aligned by sequence #'},
+  {dot:'m2',label:'POST-SESSION',desc:'Both uploaded and matched after the pen'},
+];
+let syncMode=1;
+document.getElementById('syncBtn').onclick=()=>{
+  syncMode=(syncMode+1)%3; const s=SYNC[syncMode];
+  const dot=document.getElementById('syncDot'); dot.className='syncdot '+s.dot;
+  document.getElementById('syncLabel').textContent=s.label;
+  document.getElementById('syncDesc').textContent=s.desc;
+};
+
+/* ============================================================ NAVIGATION (direct state — sandbox-safe, no hash routing) */
+function openPlayer(key){
+  if(!PLAYERS[key])return;
+  document.getElementById('view-hub').classList.remove('on');
+  document.getElementById('view-player').classList.add('on');
+  renderPlayer(key);
+}
+function openHub(){
+  document.getElementById('view-player').classList.remove('on');
+  document.getElementById('view-hub').classList.add('on');
+  window.scrollTo(0,0);
+}
+document.getElementById('brandHome').onclick=(e)=>{e.preventDefault();openHub();};
+renderHub();
+</script>
+</body>
+</html>
